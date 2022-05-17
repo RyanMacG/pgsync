@@ -1,3 +1,5 @@
+require 'securerandom'
+
 module PgSync
   class Task
     include Utils
@@ -93,34 +95,67 @@ module PgSync
 
         destination.truncate(table) if opts[:truncate]
 
-        from_max_id = source.max_id(table, primary_key)
-        to_max_id = destination.max_id(table, primary_key) + 1
+        # from_max_id = source.max_id(table, primary_key)
+        # to_max_id = destination.max_id(table, primary_key) + 1
 
-        if to_max_id == 1
-          from_min_id = source.min_id(table, primary_key)
-          to_max_id = from_min_id if from_min_id > 0
-        end
+        # if to_max_id == 1
+        #   from_min_id = source.min_id(table, primary_key)
+        #   to_max_id = from_min_id if from_min_id > 0
+        # end
 
-        starting_id = to_max_id
+        # starting_id = to_max_id
+        # batch_size = opts[:batch_size]
+
+        # i = 1
+        # batch_count = ((from_max_id - starting_id + 1) / batch_size.to_f).ceil
+
+        # while starting_id <= from_max_id
+        #   where = "#{quote_ident(primary_key)} >= #{starting_id} AND #{quote_ident(primary_key)} < #{starting_id + batch_size}"
+        #   log "    #{i}/#{batch_count}: #{where}"
+
+        #   # TODO be smarter for advance sql clauses
+        #   batch_sql_clause = " #{sql_clause.length > 0 ? "#{sql_clause} AND" : "WHERE"} #{where}"
+
+        #   batch_copy_to_command = "COPY (SELECT #{copy_fields} FROM #{quoted_table}#{batch_sql_clause}) TO STDOUT"
+        #   copy(batch_copy_to_command, dest_table: table, dest_fields: fields)
+
+        #   starting_id += batch_size
+        #   i += 1
+
+        total_rows = source.row_count(table)
         batch_size = opts[:batch_size]
 
-        i = 1
-        batch_count = ((from_max_id - starting_id + 1) / batch_size.to_f).ceil
+        modulo = (total_rows.to_f / batch_size.to_f).ceil
 
-        while starting_id <= from_max_id
-          where = "#{quote_ident(primary_key)} >= #{starting_id} AND #{quote_ident(primary_key)} < #{starting_id + batch_size}"
-          log "    #{i}/#{batch_count}: #{where}"
+        current_batch_position = 0
 
-          # TODO be smarter for advance sql clauses
-          batch_sql_clause = " #{sql_clause.length > 0 ? "#{sql_clause} AND" : "WHERE"} #{where}"
+        while current_batch_position < modulo
+          # Convert UUID to BigInt in the where clause then take the absolute(modulo)
+          where_modulo = "
+            @ (('x' || translate(left(#{quote_ident(primary_key)}::text, 18), '-', ''))::bit(64)::bigint)
+            % #{modulo} = #{current_batch_position}
+          "
 
-          batch_copy_to_command = "COPY (SELECT #{copy_fields} FROM #{quoted_table}#{batch_sql_clause}) TO STDOUT"
+          log "    #{current_batch_position + 1}/#{modulo}: #{where_modulo}"
+
+          batch_sql_clause = " #{sql_clause.length > 0 ? "#{sql_clause} AND" : "WHERE"} #{where_modulo}"
+
+          #   batch_copy_to_command = "COPY (SELECT #{copy_fields} FROM #{quoted_table}#{batch_sql_clause}) TO STDOUT"
+          #   copy(batch_copy_to_command, dest_table: table, dest_fields: fields)
+
+          batch_copy_to_command = "COPY (SELECT #{copy_fields} FROM #{quote_ident_full(table)}#{batch_sql_clause}) TO STDOUT"
           copy(batch_copy_to_command, dest_table: table, dest_fields: fields)
+          # to_connection.copy_data "COPY #{quote_ident_full(table)} (#{fields}) FROM STDIN" do
+          #   from_connection.copy_data batch_copy_to_command do
+          #     while (row = from_connection.get_copy_data)
+          #       to_connection.put_copy_data(row)
+          #     end
+          #   end
+          # end
 
-          starting_id += batch_size
-          i += 1
+          current_batch_position += 1
 
-          if opts[:sleep] && starting_id <= from_max_id
+          if opts[:sleep] && current_batch_position < modulo
             sleep(opts[:sleep])
           end
         end
@@ -244,9 +279,9 @@ module PgSync
         when "untouched"
           quote_ident(column)
         when "unique_email"
-          "'email' || #{quoted_primary_key(table, primary_key, rule)}::text || '@example.org'"
+          "'email' || '#{SecureRandom.hex}' || '@example.org'"
         when "unique_phone"
-          "(#{quoted_primary_key(table, primary_key, rule)}::bigint + 1000000000)::text"
+          "(#{rand 20000..50000}::bigint + 1000000000)::text"
         when "unique_secret"
           "'secret' || #{quoted_primary_key(table, primary_key, rule)}::text"
         when "random_int", "random_number"

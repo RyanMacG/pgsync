@@ -4,10 +4,20 @@ DROP SCHEMA IF EXISTS other CASCADE;
 CREATE SCHEMA public;
 CREATE SCHEMA other;
 
+CREATE FUNCTION public.gen_random_uuid()
+ RETURNS uuid
+ LANGUAGE c
+ PARALLEL SAFE
+AS '$libdir/pgcrypto', $function$pg_random_uuid$function$;
+
 DROP TYPE IF EXISTS mood;
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+DROP TABLE IF EXISTS "Users";
+DROP TABLE IF EXISTS "posts";
+
+
 CREATE TABLE "Users" (
-  "Id" SERIAL PRIMARY KEY,
+  "id" uuid NOT NULL DEFAULT public.gen_random_uuid(),
   zip_code TEXT,
   email TEXT,
   phone TEXT,
@@ -24,18 +34,18 @@ CREATE TABLE "Users" (
 );
 
 CREATE TABLE posts (
-  id SERIAL PRIMARY KEY,
+  "id" uuid NOT NULL DEFAULT public.gen_random_uuid() PRIMARY KEY,
   title TEXT
 );
 
 CREATE TABLE comments (
   id SERIAL PRIMARY KEY,
-  post_id INTEGER REFERENCES posts(id)
+  post_id uuid REFERENCES posts(id)
 );
 
 CREATE TABLE comments2 (
   id SERIAL PRIMARY KEY,
-  post_id INTEGER REFERENCES posts(id)
+  post_id uuid REFERENCES posts(id)
 );
 
 CREATE TABLE books (

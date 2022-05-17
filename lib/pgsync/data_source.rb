@@ -60,6 +60,10 @@ module PgSync
       execute("SELECT MIN(#{quote_ident(primary_key)}) FROM #{quote_ident_full(table)}#{sql_clause}").first["min"].to_i
     end
 
+    def row_count(table)
+      execute("SELECT COUNT(*) as total_rows FROM #{quote_ident_full(table)}")[0]["total_rows"]
+    end
+
     def last_value(seq)
       execute("SELECT last_value FROM #{quote_ident_full(seq)}").first["last_value"]
     end

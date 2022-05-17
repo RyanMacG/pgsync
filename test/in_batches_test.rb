@@ -6,15 +6,15 @@ class InBatchesTest < Minitest::Test
   end
 
   def test_works
-    source = 3.times.map { |i| {"id" => i + 1, "title" => "Post #{i + 1}"} }
+    source = 3.times.map { |i| {  "title" => "Post #{i + 1}"} }
     dest = []
     expected = source
     assert_result("--in-batches --batch-size 1", source, dest, expected)
   end
 
   def test_existing_data
-    source = 3.times.map { |i| {"id" => i + 1, "title" => "Post #{i + 1}"} }
-    dest = [{"id" => 1, "title" => "First Post"}, {"id" => 4, "title" => "Post 4"}]
+    source = 3.times.map { |i| { "title" => "Post #{i + 1}"} }
+    dest = [{"title" => "First Post"}, {"title" => "Post 4"}]
     expected = dest
     assert_result("--in-batches --batch-size 1", source, dest, expected)
   end
